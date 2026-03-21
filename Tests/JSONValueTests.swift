@@ -1,103 +1,208 @@
-import XCTest
+import Foundation
+import Testing
 @testable import JSONValue
 
-final class JSONValueTests: XCTestCase {
-    private let decoder = JSONDecoder()
+struct JSONValueTests {
+    private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
 
-    func testDecodesString() throws {
-        let value = try decode(#""hello""#)
-
-        guard case let .string(string) = value else {
-            return XCTFail("Expected string value")
-        }
-
-        XCTAssertEqual(string, "hello")
+    init() {
+        decoder = JSONDecoder()
+        encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
     }
 
-    func testDecodesNumber() throws {
-        let value = try decode("42")
+    @Test(arguments: [
+        (#""hello""#, JSONValue.string("hello")),
+        ("42", JSONValue.integer(42)),
+        ("3.14", JSONValue.double(3.14)),
+        ("true", JSONValue.bool(true)),
+        ("null", JSONValue.null),
+    ])
+    func decodesPrimitive(_ json: String, expected: JSONValue) throws {
+        let value = try decode(json)
 
-        guard case let .number(number) = value else {
-            return XCTFail("Expected number value")
-        }
-
-        XCTAssertEqual(number, 42)
+        #expect(matches(value, expected))
     }
 
-    func testDecodesBool() throws {
-        let value = try decode("true")
+    @Test
+    func decodesArray() throws {
+        let value = try decode(#"[1, "two", false, 2.5, null]"#)
 
-        guard case let .bool(bool) = value else {
-            return XCTFail("Expected bool value")
-        }
-
-        XCTAssertTrue(bool)
+        let array = try #require(arrayValue(from: value))
+        #expect(matches(.array(array), .array([.integer(1), .string("two"), .bool(false), .double(2.5), .null])))
     }
 
-    func testDecodesNull() throws {
-        let value = try decode("null")
+    @Test
+    func decodesObject() throws {
+        let value = try decode(#"{"name":"Ada","active":true,"score":12}"#)
 
-        guard case .null = value else {
-            return XCTFail("Expected null value")
-        }
+        let object = try #require(objectValue(from: value))
+        #expect(matches(object["name"], .string("Ada")))
+        #expect(matches(object["active"], .bool(true)))
+        #expect(matches(object["score"], .integer(12)))
     }
 
-    func testDecodesArray() throws {
-        let value = try decode(#"[1, "two", false]"#)
+    @Test
+    func decodesNestedPayload() throws {
+        let value = try decode(#"{"user":{"name":"Ada"},"items":[1,null,{"ok":false},{"weight":1.5}]}"#)
 
-        guard case let .array(array) = value else {
-            return XCTFail("Expected array value")
-        }
+        let object = try #require(objectValue(from: value))
+        let user = try #require(object["user"])
+        let userObject = try #require(objectValue(from: user))
+        #expect(matches(userObject["name"], .string("Ada")))
 
-        XCTAssertEqual(array.count, 3)
+        let items = try #require(object["items"])
+        let itemsArray = try #require(arrayValue(from: items))
+        #expect(itemsArray.count == 4)
+        #expect(matches(itemsArray[0], .integer(1)))
+        #expect(matches(itemsArray[1], .null))
+        #expect(matches(itemsArray[2], .object(["ok": .bool(false)])))
+        #expect(matches(itemsArray[3], .object(["weight": .double(1.5)])))
     }
 
-    func testDecodesObject() throws {
-        let value = try decode(#"{"name":"Ada","active":true}"#)
+    @Test(arguments: [
+        (JSONValue.string("hello"), #""hello""#),
+        (JSONValue.integer(42), "42"),
+        (JSONValue.double(3.14), "3.14"),
+        (JSONValue.bool(true), "true"),
+        (JSONValue.null, "null"),
+        (JSONValue.array([.integer(1), .string("two")]), #"[1,"two"]"#),
+        (JSONValue.object(["active": .bool(true), "name": .string("Ada")]), #"{"active":true,"name":"Ada"}"#),
+    ])
+    func encodesValue(_ value: JSONValue, expectedJSON: String) throws {
+        let data = try encoder.encode(value)
+        let encoded = try #require(String(data: data, encoding: .utf8))
 
-        guard case let .object(object) = value else {
-            return XCTFail("Expected object value")
-        }
-
-        XCTAssertEqual(object.keys.sorted(), ["active", "name"])
+        #expect(encoded == expectedJSON)
     }
 
-    func testDecodesNestedPayload() throws {
-        let value = try decode(#"{"user":{"name":"Ada"},"items":[1,null,{"ok":false}]}"#)
+    @Test(arguments: [
+        JSONValue.string("hello"),
+        JSONValue.integer(42),
+        JSONValue.double(3.14),
+        JSONValue.bool(false),
+        JSONValue.null,
+        JSONValue.array([.integer(1), .double(2.5), .null]),
+        JSONValue.object(["meta": .object(["count": .integer(2)])]),
+    ])
+    func roundTripsThroughJSONCoder(_ original: JSONValue) throws {
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(JSONValue.self, from: data)
 
-        guard case let .object(object) = value else {
-            return XCTFail("Expected object value")
-        }
-
-        guard case let .object(user)? = object["user"] else {
-            return XCTFail("Expected nested user object")
-        }
-
-        guard case let .string(name)? = user["name"] else {
-            return XCTFail("Expected nested name string")
-        }
-
-        XCTAssertEqual(name, "Ada")
-
-        guard case let .array(items)? = object["items"] else {
-            return XCTFail("Expected nested items array")
-        }
-
-        XCTAssertEqual(items.count, 3)
+        #expect(matches(decoded, original))
     }
 
-    func testThrowsUnsupportedObjectErrorForUnsupportedSingleValue() {
-        XCTAssertThrowsError(try JSONValue(from: UnsupportedDecoder())) { error in
-            guard case let DecodingError.dataCorrupted(context) = error else {
-                return XCTFail("Expected dataCorrupted error")
+    @Test
+    func supportsLiteralConstruction() {
+        let string: JSONValue = "Ada"
+        let integer: JSONValue = 42
+        let double: JSONValue = 3.14
+        let bool: JSONValue = true
+        let array: JSONValue = [1, "two", false, nil]
+        let object: JSONValue = ["name": "Ada", "age": 42, "verified": true, "nickname": nil]
+        let null: JSONValue = nil
+
+        #expect(matches(string, .string("Ada")))
+        #expect(matches(integer, .integer(42)))
+        #expect(matches(double, .double(3.14)))
+        #expect(matches(bool, .bool(true)))
+        #expect(matches(array, .array([.integer(1), .string("two"), .bool(false), .null])))
+        #expect(matches(object, .object([
+            "name": .string("Ada"),
+            "age": .integer(42),
+            "verified": .bool(true),
+            "nickname": .null,
+        ])))
+        #expect(matches(null, .null))
+    }
+
+    @Test
+    func throwsUnsupportedObjectErrorForUnsupportedSingleValue() {
+        do {
+            _ = try JSONValue(from: UnsupportedDecoder())
+            Issue.record("Expected dataCorrupted error")
+        } catch let error as DecodingError {
+            guard case let .dataCorrupted(context) = error else {
+                Issue.record("Expected dataCorrupted error")
+                return
             }
 
-            XCTAssertEqual(context.debugDescription, "Unsupported JSON object")
+            #expect(context.debugDescription == "Unsupported JSON object")
+        } catch {
+            Issue.record("Expected DecodingError, got \(String(describing: error))")
         }
     }
 
     private func decode(_ json: String) throws -> JSONValue {
         try decoder.decode(JSONValue.self, from: Data(json.utf8))
+    }
+
+    private func arrayValue(from value: JSONValue) -> [JSONValue]? {
+        guard case let .array(array) = value else {
+            return nil
+        }
+
+        return array
+    }
+
+    private func objectValue(from value: JSONValue) -> [String: JSONValue]? {
+        guard case let .object(object) = value else {
+            return nil
+        }
+
+        return object
+    }
+
+    private func matches(_ lhs: JSONValue?, _ rhs: JSONValue) -> Bool {
+        guard let lhs else {
+            return false
+        }
+
+        return matches(lhs, rhs)
+    }
+
+    private func matches(_ lhs: JSONValue, _ rhs: JSONValue) -> Bool {
+        switch (lhs, rhs) {
+        case let (.string(lhs), .string(rhs)):
+            lhs == rhs
+        case let (.integer(lhs), .integer(rhs)):
+            lhs == rhs
+        case let (.double(lhs), .double(rhs)):
+            lhs == rhs
+        case let (.bool(lhs), .bool(rhs)):
+            lhs == rhs
+        case let (.object(lhs), .object(rhs)):
+            dictionaryMatches(lhs, rhs)
+        case let (.array(lhs), .array(rhs)):
+            arrayMatches(lhs, rhs)
+        case (.null, .null):
+            true
+        default:
+            false
+        }
+    }
+
+    private func arrayMatches(_ lhs: [JSONValue], _ rhs: [JSONValue]) -> Bool {
+        guard lhs.count == rhs.count else {
+            return false
+        }
+
+        return zip(lhs, rhs).allSatisfy(matches)
+    }
+
+    private func dictionaryMatches(_ lhs: [String: JSONValue], _ rhs: [String: JSONValue]) -> Bool {
+        guard lhs.count == rhs.count else {
+            return false
+        }
+
+        for (key, lhsValue) in lhs {
+            guard let rhsValue = rhs[key], matches(lhsValue, rhsValue) else {
+                return false
+            }
+        }
+
+        return true
     }
 }
 
@@ -105,7 +210,7 @@ private struct UnsupportedDecoder: Decoder {
     var codingPath: [CodingKey] { [] }
     var userInfo: [CodingUserInfoKey: Any] { [:] }
 
-    func container<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> {
+    func container<Key>(keyedBy _: Key.Type) throws -> KeyedDecodingContainer<Key> {
         throw DecodingError.typeMismatch(
             [String: JSONValue].self,
             .init(codingPath: codingPath, debugDescription: "Unsupported keyed container")
@@ -174,7 +279,7 @@ private struct UnsupportedUnkeyedDecodingContainer: UnkeyedDecodingContainer {
     mutating func decode(_: UInt32.Type) throws -> UInt32 { throw unsupported }
     mutating func decode(_: UInt64.Type) throws -> UInt64 { throw unsupported }
     mutating func decode<T>(_: T.Type) throws -> T where T: Decodable { throw unsupported }
-    mutating func nestedContainer<NestedKey>(keyedBy type: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> {
+    mutating func nestedContainer<NestedKey>(keyedBy _: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> {
         throw unsupported
     }
     mutating func nestedUnkeyedContainer() throws -> UnkeyedDecodingContainer { throw unsupported }

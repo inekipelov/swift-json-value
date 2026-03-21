@@ -1,10 +1,7 @@
 # JSONValue
 
-`JSONValue` is a small Swift Package that wraps arbitrary JSON payloads in a
-single recursive enum.
-
-It is useful when you need to decode unknown or mixed JSON structures without
-committing to a fixed `Codable` model upfront.
+`JSONValue` is a Swift Package for encoding, decoding, and constructing
+arbitrary JSON values without a fixed `Codable` model.
 
 <p align="center">
   <a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-6.0+-F05138?logo=swift&logoColor=white" alt="Swift 6.0+"></a>
@@ -15,56 +12,28 @@ committing to a fixed `Codable` model upfront.
   <a href="https://developer.apple.com/visionos/"><img src="https://img.shields.io/badge/visionOS-1.0+-000000?logo=apple" alt="visionOS 1.0+"></a>
 </p>
 
-## Installation
-
-Add the package to your `Package.swift` dependencies:
-
-```swift
-.package(url: "https://github.com/inekipelov/swift-json-value.git", from: "1.0.0")
-```
-
-Then add `JSONValue` to your target dependencies:
-
-```swift
-.target(
-    name: "YourTarget",
-    dependencies: [
-        "JSONValue"
-    ]
-)
-```
-
 ## Usage
 
 ```swift
 import Foundation
 import JSONValue
 
-let data = Data(
-    """
-    {
-      "id": 42,
-      "name": "Ada",
-      "flags": [true, false, null],
-      "profile": {
-        "role": "admin"
-      }
-    }
-    """.utf8
-)
+let value: JSONValue = [
+    "id": 42,
+    "name": "Ada",
+    "active": true,
+    "rating": 4.5,
+    "tags": ["swift", nil]
+]
 
-let value = try JSONDecoder().decode(JSONValue.self, from: data)
-
-if case let .object(object) = value {
-    if case let .number(id)? = object["id"] {
-        print(id) // 42
-    }
-
-    if case let .array(flags)? = object["flags"] {
-        print(flags.count) // 3
-    }
-}
+let data = try JSONEncoder().encode(value)
+let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
 ```
 
-This package extracts the generic JSON container used in TrackFinder into a
-standalone SPM module so it can be reused independently from the application.
+Supported literals: `String`, `Int`, `Double`, `Bool`, array, dictionary, and `nil`.
+
+## Installation
+
+```swift
+.package(url: "https://github.com/inekipelov/swift-json-value.git", from: "1.0.0")
+```

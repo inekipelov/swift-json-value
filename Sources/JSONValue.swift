@@ -4,9 +4,10 @@ import Foundation
 ///
 /// `JSONValue` preserves arbitrary JSON payloads with a small recursive enum that
 /// can represent primitives, arrays, objects, and null.
-public enum JSONValue: Decodable {
+public enum JSONValue: Sendable, Codable {
     case string(String)
-    case number(Double)
+    case integer(Int)
+    case double(Double)
     case bool(Bool)
     case object([String: JSONValue])
     case array([JSONValue])
@@ -25,8 +26,13 @@ public enum JSONValue: Decodable {
             return
         }
 
-        if let number = try? container.decode(Double.self) {
-            self = .number(number)
+        if let integer = try? container.decode(Int.self) {
+            self = .integer(integer)
+            return
+        }
+
+        if let double = try? container.decode(Double.self) {
+            self = .double(double)
             return
         }
 
@@ -46,6 +52,81 @@ public enum JSONValue: Decodable {
         }
 
         throw DecodingError.unsupportedObject(in: container)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+
+        switch self {
+        case let .string(value):
+            try container.encode(value)
+        case let .integer(value):
+            try container.encode(value)
+        case let .double(value):
+            try container.encode(value)
+        case let .bool(value):
+            try container.encode(value)
+        case let .object(value):
+            try container.encode(value)
+        case let .array(value):
+            try container.encode(value)
+        case .null:
+            try container.encodeNil()
+        }
+    }
+}
+
+extension JSONValue: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = .string(value)
+    }
+}
+
+extension JSONValue: ExpressibleByExtendedGraphemeClusterLiteral {
+    public init(extendedGraphemeClusterLiteral value: String) {
+        self = .string(value)
+    }
+}
+
+extension JSONValue: ExpressibleByUnicodeScalarLiteral {
+    public init(unicodeScalarLiteral value: String) {
+        self = .string(value)
+    }
+}
+
+extension JSONValue: ExpressibleByIntegerLiteral {
+    public init(integerLiteral value: Int) {
+        self = .integer(value)
+    }
+}
+
+extension JSONValue: ExpressibleByFloatLiteral {
+    public init(floatLiteral value: Double) {
+        self = .double(value)
+    }
+}
+
+extension JSONValue: ExpressibleByBooleanLiteral {
+    public init(booleanLiteral value: Bool) {
+        self = .bool(value)
+    }
+}
+
+extension JSONValue: ExpressibleByArrayLiteral {
+    public init(arrayLiteral elements: JSONValue...) {
+        self = .array(elements)
+    }
+}
+
+extension JSONValue: ExpressibleByDictionaryLiteral {
+    public init(dictionaryLiteral elements: (String, JSONValue)...) {
+        self = .object(Dictionary(uniqueKeysWithValues: elements))
+    }
+}
+
+extension JSONValue: ExpressibleByNilLiteral {
+    public init(nilLiteral: ()) {
+        self = .null
     }
 }
 
