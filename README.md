@@ -26,11 +26,13 @@ let value: JSONValue = [
     "tags": ["swift", nil]
 ]
 
+let name = value["name"]
+let firstTag = value["tags"]?[0]
+let active = value.active
+
 let data = try JSONEncoder().encode(value)
 let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
 ```
-
-Supported literals: `String`, `Int`, `Double`, `Bool`, array, dictionary, and `nil`.
 
 ## Installation
 
