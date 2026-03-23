@@ -4,6 +4,7 @@ import Foundation
 ///
 /// `JSONValue` preserves arbitrary JSON payloads with a small recursive enum that
 /// can represent primitives, arrays, objects, and null.
+@dynamicMemberLookup
 public enum JSONValue: Sendable, Codable {
     case string(String)
     case integer(Int)
@@ -73,6 +74,26 @@ public enum JSONValue: Sendable, Codable {
         case .null:
             try container.encodeNil()
         }
+    }
+
+    public subscript(key: String) -> JSONValue? {
+        guard case let .object(object) = self else {
+            return nil
+        }
+
+        return object[key]
+    }
+
+    public subscript(index: Int) -> JSONValue? {
+        guard case let .array(array) = self, array.indices.contains(index) else {
+            return nil
+        }
+
+        return array[index]
+    }
+
+    public subscript(dynamicMember member: String) -> JSONValue? {
+        self[member]
     }
 }
 

@@ -118,6 +118,65 @@ struct JSONValueTests {
     }
 
     @Test
+    func supportsObjectSubscriptLookup() {
+        let json: JSONValue = [
+            "user": [
+                "name": "Ada",
+                "active": true,
+            ],
+            "age": 42,
+        ]
+
+        #expect(matches(json["age"], .integer(42)))
+        #expect(matches(json["user"]?["name"], .string("Ada")))
+        #expect(matches(json["user"]?["active"], .bool(true)))
+        #expect(json["missing"] == nil)
+    }
+
+    @Test
+    func supportsArraySubscriptLookup() {
+        let json: JSONValue = [
+            ["name": "Ada"],
+            42,
+            true,
+        ]
+
+        #expect(matches(json[0]?["name"], .string("Ada")))
+        #expect(matches(json[1], .integer(42)))
+        #expect(matches(json[2], .bool(true)))
+        #expect(json[3] == nil)
+    }
+
+    @Test
+    func supportsDynamicMemberLookup() {
+        let json: JSONValue = [
+            "user": [
+                "profile": [
+                    "name": "Ada"
+                ],
+                "active": true,
+            ]
+        ]
+
+        #expect(matches(json.user?.profile?.name, .string("Ada")))
+        #expect(matches(json.user?.active, .bool(true)))
+        #expect(json.user?.missing == nil)
+    }
+
+    @Test
+    func returnsNilForMismatchedLookupKinds() {
+        let object: JSONValue = ["name": "Ada"]
+        let array: JSONValue = [1, 2, 3]
+        let scalar: JSONValue = 42
+
+        #expect(object[0] == nil)
+        #expect(array["name"] == nil)
+        #expect(scalar["value"] == nil)
+        #expect(scalar[0] == nil)
+        #expect(scalar.value == nil)
+    }
+
+    @Test
     func throwsUnsupportedObjectErrorForUnsupportedSingleValue() {
         do {
             _ = try JSONValue(from: UnsupportedDecoder())
